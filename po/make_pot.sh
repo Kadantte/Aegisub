@@ -41,15 +41,15 @@ find ../automation -name *.lua \
 
 for i in 'Name' 'GenericName' 'Comment' 'Keywords'
 do
-  grep ^_$i -n ../packages/desktop/aegisub.desktop.template.in \
+  grep ^$i -n ../packages/desktop/aegisub.desktop.in.in \
     | sed 's/\([0-9]\+\):[^=]\+=\(.*\)$/aegisub.desktop|\1|"\2"/' \
     | maybe_append
 done
 
 if which xmlstarlet >/dev/null 2>&1 && which jq >/dev/null 2>&1; then
   for i in 'name' 'summary' 'p' 'li' 'caption'; do
-    xmlstarlet sel -t -v "//_$i" ../packages/desktop/aegisub.appdata.xml.template.in | jq -R .
-  done | nl -v0 -w1 -s'|' | sed -re 's/^/aegisub.appdata.xml|/' | maybe_append
+    xmlstarlet sel -t -v "//$i" ../packages/desktop/aegisub.metainfo.xml.in.in | jq -R .
+  done | nl -v0 -w1 -s'|' | sed -re 's/^/aegisub.metainfo.xml|/' | maybe_append
 fi
 
 grep '^_[A-Za-z0-9]*=.*' ../packages/win_installer/fragment_strings.iss.in | while read line

@@ -351,7 +351,9 @@ void Advanced(wxTreebook *book, Preferences *parent) {
 	auto general = p->PageSizer(_("General"));
 
 	auto warning = new wxStaticText(p, wxID_ANY ,_("Changing these settings might result in bugs and/or crashes.  Do not touch these unless you know what you're doing."));
-	warning->SetFont(wxFont(12, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD));
+	auto font = parent->GetFont().MakeBold();
+	font.SetPointSize(12);
+	warning->SetFont(font);
 	p->sizer->Fit(p);
 	warning->Wrap(400);
 	general->Add(warning, 0, wxALL, 5);
@@ -382,6 +384,10 @@ void Advanced_Audio(wxTreebook *book, Preferences *parent) {
 	const wxString sq_arr[4] = { _("Regular quality"), _("Better quality"), _("High quality"), _("Insane quality") };
 	wxArrayString sq_choice(4, sq_arr);
 	p->OptionChoice(spectrum, _("Quality"), sq_choice, "Audio/Renderer/Spectrum/Quality");
+
+	const wxString sc_arr[5] = { _("Linear"), _("Extended"), _("Medium"), _("Compressed"), _("Logarithmic") };
+	wxArrayString sc_choice(5, sc_arr);
+	p->OptionChoice(spectrum, _("Frequency mapping"), sc_choice, "Audio/Renderer/Spectrum/FreqCurve");
 
 	p->OptionAdd(spectrum, _("Cache memory max (MB)"), "Audio/Renderer/Spectrum/Memory Max", 2, 1024);
 
@@ -486,8 +492,11 @@ public:
 	}
 
 	bool SetValue(wxVariant const& var) override {
-		value << var;
-		return true;
+		if (var.GetType() == "wxDataViewIconText") {
+			value << var;
+			return true;
+		}
+		return false;
 	}
 
 	bool Render(wxRect rect, wxDC *dc, int state) override {

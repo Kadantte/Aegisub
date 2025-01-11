@@ -1,8 +1,16 @@
 project('Aegisub', ['c', 'cpp'],
         license: 'BSD-3-Clause',
         meson_version: '>=0.57.0',
-        default_options: ['cpp_std=c++20', 'buildtype=debugoptimized'],
-        version: '3.2.2')
+        default_options: [
+            'cpp_std=c++20',
+            'buildtype=debugoptimized',
+            'harfbuzz:icu=disabled',
+            'ffmpeg:libdav1d=enabled',
+            'luajit:amalgam=true',
+            'luajit:lua52compat=true',
+            'luajit:luajit=false',
+        ],
+        version: '3.4.1')
 
 cmake = import('cmake')
 
@@ -34,6 +42,8 @@ version_h = custom_target('git_version.h',
                           build_by_default: true,
                           build_always_stale: true, # has internal check whether target file will be refreshed
                           output: ['git_version.h'])
+
+meson.add_dist_script(version_sh, meson.current_build_dir(), meson.current_source_dir(), 'dist')
 
 if host_machine.system() == 'darwin' and get_option('build_osx_bundle')
     prefix = meson.current_build_dir() / 'Aegisub.app' / 'Contents'
@@ -316,34 +326,34 @@ if get_option('enable_update_checker')
     deps += [libcurl_dep]
 endif
 
-luajit = dependency('luajit', version: '>=2.0.0', required: get_option('system_luajit'))
+luajit = dependency('luajit', version: '>=2.0.0', required: get_option('system_luajit'),
+                    allow_fallback: false, method: 'pkg-config')
 if luajit.found() and luajit.type_name() != 'internal'
-    luajit_test = cc.run('''#include <lauxlib.h>
-int main(void)
-{
-    lua_State *L = luaL_newstate();
-    if (!L) return 1;
-    // This is valid in lua 5.2, but a syntax error in 5.1
-    const char testprogram[] = "function foo() while true do break return end end";
-    return luaL_loadstring(L, testprogram) == LUA_ERRSYNTAX;
-}''', dependencies: luajit)
+    luajit_test = cc.run(files('tests/tests/luajit_52.c'), dependencies: luajit)
 
-    if luajit_test.returncode() == 1
+    if luajit_test.returncode() != 0
         if get_option('system_luajit')
             error('System luajit found but not compiled in 5.2 mode')
         else
-            message('System luajit found but not compiled in 5.2 mode; using built-in luajit')
+            message('System luajit found but not compiled in 5.2 mode')
+            luajit = dependency('', required: false)
         endif
     else
         deps += luajit
     endif
-else
-    message('System luajit not found; using built-in luajit')
 endif
 
-if not deps.contains(luajit)
-    deps += subproject('luajit').get_variable('luajit_dep')
+if not luajit.found()
+    message('Using built-in luajit')
+    subproject('luajit') # Initialize subproject to ignore system luajit
+    luajit = dependency('luajit')
+    assert(luajit.type_name() == 'internal', 'System luajit used instead of built-in luajit')
 endif
+
+if luajit.type_name() == 'internal'
+    deps += luajit
+endif
+
 deps += subproject('luabins').get_variable('luabins_dep')
 
 dep_gl = dependency('gl', required: false)

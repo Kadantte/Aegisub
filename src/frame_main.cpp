@@ -84,7 +84,7 @@ class AegisubFileDropTarget final : public wxFileDropTarget {
 public:
 	AegisubFileDropTarget(agi::Context *context) : context(context) { }
 	bool OnDropFiles(wxCoord, wxCoord, wxArrayString const& filenames) override {
-		std::vector<std::filesystem::path> files;
+		std::vector<agi::fs::path> files;
 		for (wxString const& fn : filenames)
 			files.push_back(from_wx(fn));
 		agi::dispatch::Main().Async([=, this] { context->project->LoadList(files); });
@@ -127,7 +127,7 @@ FrameMain::FrameMain()
 	EnableToolBar(*OPT_GET("App/Show Toolbar"));
 
 	StartupLog("Initialize menu bar");
-	menu::GetMenuBar("main", this, context.get());
+	menu::GetMenuBar("main", this, (wxID_HIGHEST + 1) + 10000, context.get());
 
 	StartupLog("Create status bar");
 	CreateStatusBar(2);

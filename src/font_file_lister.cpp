@@ -139,6 +139,8 @@ void FontCollector::ProcessDialogueLine(const AssDialogue *line, int index) {
 			break;
 		}
 		case AssBlockType::DRAWING:
+			used_styles[style].drawing = true;
+			break;
 		case AssBlockType::COMMENT:
 			break;
 		}
@@ -146,7 +148,11 @@ void FontCollector::ProcessDialogueLine(const AssDialogue *line, int index) {
 }
 
 void FontCollector::ProcessChunk(std::pair<StyleInfo, UsageData> const& style) {
-	if (style.second.chars.empty()) return;
+	if (style.second.chars.empty() && !style.second.drawing) return;
+
+	if (style.second.chars.empty() && style.second.drawing) {
+		status_callback(fmt_tl("Font '%s' is used in a drawing, but not in any text.\n", style.first.facename), 3);
+	}
 
 	auto res = lister.GetFontPaths(style.first.facename, style.first.bold, style.first.italic, style.second.chars);
 
@@ -198,7 +204,7 @@ void FontCollector::PrintUsage(UsageData const& data) {
 	status_callback("\n", 2);
 }
 
-std::vector<std::filesystem::path> FontCollector::GetFontPaths(const AssFile *file) {
+std::vector<agi::fs::path> FontCollector::GetFontPaths(const AssFile *file) {
 	missing = 0;
 	missing_glyphs = 0;
 
@@ -220,7 +226,7 @@ std::vector<std::filesystem::path> FontCollector::GetFontPaths(const AssFile *fi
 	for (auto const& style : used_styles) ProcessChunk(style);
 	status_callback(_("Done\n\n"), 0);
 
-	std::vector<std::filesystem::path> paths;
+	std::vector<agi::fs::path> paths;
 	paths.reserve(results.size());
 	paths.insert(paths.end(), results.begin(), results.end());
 

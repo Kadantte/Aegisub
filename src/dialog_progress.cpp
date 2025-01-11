@@ -42,10 +42,6 @@ using agi::dispatch::Main;
 namespace {
 	void set_taskbar_progress(int progress) {
 #ifdef _MSC_VER
-		int major, minor;
-		wxGetOsVersion(&major, &minor);
-		if (major < 6 || (major == 6 && minor < 1)) return;
-
 		ITaskbarList3 *taskbar;
 		auto hr = ::CoCreateInstance(CLSID_TaskbarList, NULL, CLSCTX_INPROC_SERVER,
 			__uuidof(ITaskbarList3), (LPVOID *)&taskbar);
@@ -246,6 +242,8 @@ void DialogProgress::OnCancel(wxCommandEvent &) {
 }
 
 void DialogProgress::SetProgress(int target) {
+	pulse_timer.Stop();
+
 	if (target == progress_target) return;
 	using namespace std::chrono;
 

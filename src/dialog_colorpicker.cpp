@@ -381,10 +381,14 @@ public:
 	void DropFromScreenXY(int x, int y);
 };
 
+#ifndef MAC_OS_VERSION_15_0
+#define MAC_OS_VERSION_15_0 150000
+#endif
+
 void ColorPickerScreenDropper::DropFromScreenXY(int x, int y) {
 	wxMemoryDC capdc(capture);
 	capdc.SetPen(*wxTRANSPARENT_PEN);
-#ifndef __WXMAC__
+#if !(defined(__WXMAC__) && (MAC_OS_X_VERSION_MIN_REQUIRED < MAC_OS_VERSION_15_0))
 	wxScreenDC screen;
 	capdc.StretchBlit(0, 0, resx * magnification, resy * magnification,
 		&screen, x - resx / 2, y - resy / 2, resx, resy);
@@ -397,8 +401,8 @@ void ColorPickerScreenDropper::DropFromScreenXY(int x, int y) {
 	CGGetDisplaysWithPoint(CGPointMake(x, y), 1, &display_id, &display_count);
 
 	agi::scoped_holder<CGImageRef> img(CGDisplayCreateImageForRect(display_id, CGRectMake(x - resx / 2, y - resy / 2, resx, resy)), CGImageRelease);
-	NSUInteger width = CGImageGetWidth(img);
-	NSUInteger height = CGImageGetHeight(img);
+	size_t width = CGImageGetWidth(img);
+	size_t height = CGImageGetHeight(img);
 	std::vector<uint8_t> imgdata(height * width * 4);
 
 	agi::scoped_holder<CGColorSpaceRef> colorspace(CGColorSpaceCreateDeviceRGB(), CGColorSpaceRelease);
