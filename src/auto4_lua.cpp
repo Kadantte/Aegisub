@@ -118,13 +118,14 @@ namespace {
 	int get_translation(lua_State *L)
 	{
 		wxString str(check_wxstring(L, 1));
-		push_value(L, _(str).utf8_str());
+		push_value(L, wxGetTranslation(str).utf8_str());
 		return 1;
 	}
 
 	const char *clipboard_get()
 	{
-		std::string data = GetClipboard();
+		std::string data;
+		agi::dispatch::Main().Sync([&] { data = GetClipboard(); });
 		if (data.empty())
 			return nullptr;
 		return strndup(data);
@@ -134,18 +135,14 @@ namespace {
 	{
 		bool succeeded = false;
 
-#if wxUSE_OLE
-		// OLE needs to be initialized on each thread that wants to write to
-		// the clipboard, which wx does not handle automatically
-		wxClipboard cb;
-#else
-		wxClipboard &cb = *wxTheClipboard;
-#endif
-		if (cb.Open()) {
-			succeeded = cb.SetData(new wxTextDataObject(wxString::FromUTF8(str)));
-			cb.Close();
-			cb.Flush();
-		}
+		agi::dispatch::Main().Sync([&] {
+			wxClipboard &cb = *wxTheClipboard;
+			if (cb.Open()) {
+				succeeded = cb.SetData(new wxTextDataObject(wxString::FromUTF8(str)));
+				cb.Close();
+				cb.Flush();
+			}
+		});
 
 		return succeeded;
 	}
@@ -390,7 +387,7 @@ namespace {
 		static int LuaInclude(lua_State *L);
 
 	public:
-		LuaScript(std::filesystem::path const& filename);
+		LuaScript(agi::fs::path const& filename);
 		~LuaScript() { Destroy(); }
 
 		void RegisterCommand(LuaCommand *command);
@@ -412,7 +409,7 @@ namespace {
 		std::vector<ExportFilter*> GetFilters() const override;
 	};
 
-	LuaScript::LuaScript(std::filesystem::path const& filename)
+	LuaScript::LuaScript(agi::fs::path const& filename)
 	: Script(filename)
 	{
 		Create();
@@ -520,6 +517,7 @@ namespace {
 		if (lua_isnumber(L, -1) && lua_tointeger(L, -1) == 3) {
 			lua_pop(L, 1); // just to avoid tripping the stackcheck in debug
 			description = "Attempted to load an Automation 3 script as an Automation 4 Lua script. Automation 3 is no longer supported.";
+			stackcheck.check_stack(0);
 			return;
 		}
 
@@ -532,6 +530,7 @@ namespace {
 			name = GetPrettyFilename().string();
 
 		lua_pop(L, 1);
+		stackcheck.check_stack(0);
 		// if we got this far, the script should be ready
 		loaded = true;
 	}
@@ -595,7 +594,7 @@ namespace {
 		const LuaScript *s = GetScriptObject(L);
 
 		const std::string filename(check_string(L, 1));
-		std::filesystem::path filepath;
+		agi::fs::path filepath;
 
 		// Relative or absolute path
 		if (!boost::all(filename, !boost::is_any_of("/\\")))
@@ -623,27 +622,38 @@ namespace {
 	{
 		bool failed = false;
 		BackgroundScriptRunner bsr(parent, title);
-		bsr.Run([&](ProgressSink *ps) {
-			LuaProgressSink lps(L, ps, can_open_config);
+		try {
+			bsr.Run([&](ProgressSink *ps) {
+				LuaProgressSink lps(L, ps, can_open_config);
 
-			// Insert our error handler under the function to call
-			lua_pushcclosure(L, add_stack_trace, 0);
-			lua_insert(L, -nargs - 2);
+				// Insert our error handler under the function to call
+				lua_pushcclosure(L, add_stack_trace, 0);
+				lua_insert(L, -nargs - 2);
 
-			if (lua_pcall(L, nargs, nresults, -nargs - 2)) {
-				if (!lua_isnil(L, -1)) {
-					// if the call failed, log the error here
-					ps->Log("\n\nLua reported a runtime error:\n");
-					ps->Log(get_string_or_default(L, -1));
+				if (lua_pcall(L, nargs, nresults, -nargs - 2)) {
+					if (!lua_isnil(L, -1)) {
+						// if the call failed, log the error here
+						ps->Log("\n\nLua reported a runtime error:\n");
+						ps->Log(get_string_or_default(L, -1));
+					}
+					lua_pop(L, 2);
+					failed = true;
 				}
-				lua_pop(L, 2);
-				failed = true;
-			}
-			else
-				lua_remove(L, -nresults - 1);
+				else
+					lua_remove(L, -nresults - 1);
 
-			lua_gc(L, LUA_GCCOLLECT, 0);
-		});
+				lua_gc(L, LUA_GCCOLLECT, 0);
+			});
+		} catch (agi::UserCancelException const&) {
+			// A UserCancelException can be thrown by the background runner after
+			// the above closure ran through.
+			// Below, we want to throw our own UserCancelException when the script throws an error,
+			// in which case we leave the stack empty. Hence, if the script did not throw an error,
+			// we need to pop the return values here to also leave the stack empty.
+			if (!failed)
+				lua_pop(L, nresults);
+			throw;
+		}
 		if (failed)
 			throw agi::UserCancelException("Script threw an error");
 	}
@@ -1029,7 +1039,7 @@ namespace Automation4 {
 	{
 	}
 
-	std::unique_ptr<Script> LuaScriptFactory::Produce(std::filesystem::path const& filename) const
+	std::unique_ptr<Script> LuaScriptFactory::Produce(agi::fs::path const& filename) const
 	{
 		if (agi::fs::HasExtension(filename, "lua") || agi::fs::HasExtension(filename, "moon"))
 			return std::make_unique<LuaScript>(filename);
