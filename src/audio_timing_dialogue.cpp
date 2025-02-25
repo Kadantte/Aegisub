@@ -39,9 +39,12 @@
 #include "selection_controller.h"
 #include "utils.h"
 
+#include <list>
+
 #include <libaegisub/ass/time.h>
 
 #include <boost/range/algorithm.hpp>
+
 #include <wx/pen.h>
 
 namespace {
@@ -323,8 +326,8 @@ class AudioTimingControllerDialogue final : public AudioTimingController {
 	/// The owning project context
 	agi::Context *context;
 
-	/// The time which was clicked on for alt-dragging mode
-	int clicked_ms;
+	/// The time which was clicked on for alt-dragging mode, or INT_MIN if not in alt-draging mode
+	int clicked_ms = INT_MIN;
 
 	/// Autocommit option
 	const agi::OptionValue *auto_commit = OPT_GET("Audio/Auto/Commit");
@@ -422,9 +425,9 @@ AudioTimingControllerDialogue::AudioTimingControllerDialogue(agi::Context *c)
 , active_line_connection(c->selectionController->AddActiveLineListener(&AudioTimingControllerDialogue::Revert, this))
 , selection_connection(c->selectionController->AddSelectionListener(&AudioTimingControllerDialogue::OnSelectedSetChanged, this))
 {
-	keyframes_provider.AddMarkerMovedListener([=, this]{ AnnounceMarkerMoved(); });
-	video_position_provider.AddMarkerMovedListener([=, this]{ AnnounceMarkerMoved(); });
-	seconds_provider.AddMarkerMovedListener([=, this]{ AnnounceMarkerMoved(); });
+	keyframes_provider.AddMarkerMovedListener([this]{ AnnounceMarkerMoved(); });
+	video_position_provider.AddMarkerMovedListener([this]{ AnnounceMarkerMoved(); });
+	seconds_provider.AddMarkerMovedListener([this]{ AnnounceMarkerMoved(); });
 
 	Revert();
 }

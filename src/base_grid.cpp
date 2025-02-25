@@ -54,9 +54,10 @@
 #include <wx/scrolbar.h>
 #include <wx/sizer.h>
 
+// Check menu.h for id range allocation before editing this enum
 enum {
 	GRID_SCROLLBAR = 1730,
-	MENU_SHOW_COL = 1250 // Needs 15 IDs after this
+	MENU_SHOW_COL = (wxID_HIGHEST + 1) + 2000 // Needs 15 IDs after this
 };
 
 BaseGrid::BaseGrid(wxWindow* parent, agi::Context *context)
@@ -123,7 +124,13 @@ BEGIN_EVENT_TABLE(BaseGrid,wxWindow)
 	EVT_KEY_DOWN(BaseGrid::OnKeyDown)
 	EVT_CHAR_HOOK(BaseGrid::OnCharHook)
 	EVT_MENU_RANGE(MENU_SHOW_COL,MENU_SHOW_COL+15,BaseGrid::OnShowColMenu)
+	EVT_DPI_CHANGED(BaseGrid::OnDPIChanged)
 END_EVENT_TABLE()
+
+void BaseGrid::OnDPIChanged(wxDPIChangedEvent &e) {
+	UpdateStyle();
+	e.Skip();
+}
 
 void BaseGrid::OnSubtitlesCommit(int type) {
 	if (type == AssFile::COMMIT_NEW || type & AssFile::COMMIT_ORDER || type & AssFile::COMMIT_DIAG_ADDREM)
@@ -184,6 +191,9 @@ void BaseGrid::UpdateStyle() {
 	row_colors.Visible.SetColour(to_wx(OPT_GET("Colour/Subtitle Grid/Background/Inframe")->GetColor()));
 	row_colors.SelectedComment.SetColour(to_wx(OPT_GET("Colour/Subtitle Grid/Background/Selected Comment")->GetColor()));
 	row_colors.LeftCol.SetColour(to_wx(OPT_GET("Colour/Subtitle Grid/Left Column")->GetColor()));
+
+	if (width_helper)
+		width_helper->ClearCache();
 
 	SetColumnWidths();
 
@@ -542,7 +552,7 @@ void BaseGrid::OnMouseEvent(wxMouseEvent &event) {
 void BaseGrid::OnContextMenu(wxContextMenuEvent &evt) {
 	wxPoint pos = evt.GetPosition();
 	if (pos == wxDefaultPosition || ScreenToClient(pos).y > lineHeight) {
-		if (!context_menu) context_menu = menu::GetMenu("grid_context", context);
+		if (!context_menu) context_menu = menu::GetMenu("grid_context", (wxID_HIGHEST + 1) + 8000, context);
 		menu::OpenPopupMenu(context_menu.get(), this);
 	}
 	else {
